@@ -196,9 +196,9 @@ function unlockDashboard(user) {
         else if (avatarEl) { avatarEl.style.display = 'none'; }
         profileEl.classList.remove('hidden');
     }
-    // Show Team tab for admin
+    // Show Team tab for admin and senior
     const role = user.role || 'junior';
-    if (role === 'admin') {
+    if (role === 'admin' || role === 'senior') {
         const teamBtn = document.getElementById('nav-team-btn');
         if (teamBtn) teamBtn.classList.remove('hidden');
     }
@@ -466,7 +466,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const loadTeam = async () => {
-        if (window._userRole !== 'admin' || !teamTbody) return;
+        if (!['admin','senior'].includes(window._userRole) || !teamTbody) return;
         teamTbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted);">Loading team...</td></tr>';
         try {
             const res = await fetch(`${API_BASE}/api/users`, { headers: authHeaders() });
@@ -510,23 +510,22 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     window._loadTeam = loadTeam;
 
-    // ─── Create External User ───
+    // ─── Create User (Admin: any, Senior: brand only) ───
     const createUserBtn = document.getElementById('create-user-btn');
     if (createUserBtn) {
         createUserBtn.addEventListener('click', async () => {
             const email = document.getElementById('new-user-email').value.trim();
-            const name = document.getElementById('new-user-name').value.trim();
             const password = document.getElementById('new-user-password').value;
             const role = document.getElementById('new-user-role').value;
             const errEl = document.getElementById('create-user-error');
             errEl.classList.add('hidden');
 
-            if (!email || !password) {
-                errEl.textContent = 'Email and password are required.';
+            if (!email) {
+                errEl.textContent = 'Email is required.';
                 errEl.classList.remove('hidden');
                 return;
             }
-            if (password.length < 6) {
+            if (password && password.length < 6) {
                 errEl.textContent = 'Password must be at least 6 characters.';
                 errEl.classList.remove('hidden');
                 return;
@@ -536,19 +535,20 @@ document.addEventListener('DOMContentLoaded', () => {
             createUserBtn.textContent = 'Creating...';
 
             try {
+                const body = { email, role };
+                if (password) body.password = password;
+
                 const res = await fetch(`${API_BASE}/api/users/create`, {
                     method: 'POST',
                     headers: authHeaders({ 'Content-Type': 'application/json' }),
-                    body: JSON.stringify({ email, name, password, role })
+                    body: JSON.stringify(body)
                 });
                 const data = await res.json();
                 if (!res.ok) {
                     errEl.textContent = data.error || 'Failed to create user';
                     errEl.classList.remove('hidden');
                 } else {
-                    // Clear form and reload team
                     document.getElementById('new-user-email').value = '';
-                    document.getElementById('new-user-name').value = '';
                     document.getElementById('new-user-password').value = '';
                     document.getElementById('new-user-role').value = 'junior';
                     await loadTeam();
@@ -645,9 +645,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (auditFilterOp) auditFilterOp.addEventListener('change', renderAuditLogs);
     if (auditRefreshBtn) auditRefreshBtn.addEventListener('click', loadAuditLogs);
 
-    // Auto-load admin panels
-    if (window._userRole === 'admin') {
+    // Auto-load admin/senior panels
+    if (window._userRole === 'admin' || window._userRole === 'senior') {
         loadTeam();
-        loadAuditLogs();
+        if (window._userRole === 'admin') loadAuditLogs();
     }
 });

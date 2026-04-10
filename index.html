@@ -397,18 +397,18 @@
                     </div>
                 </div>
 
-                <!-- Create External User Form -->
+                <!-- Add User / Pre-assign Role -->
                 <div class="create-user-form" id="create-user-form">
                     <div class="form-row">
-                        <input type="email" id="new-user-email" class="login-input" placeholder="Email" style="flex:1.5;">
-                        <input type="text" id="new-user-name" class="login-input" placeholder="Name" style="flex:1;">
-                        <input type="password" id="new-user-password" class="login-input" placeholder="Password (min 6)" style="flex:1;">
-                        <select id="new-user-role" class="filter-select" style="min-width:90px;">
+                        <input type="email" id="new-user-email" class="login-input" placeholder="Email address" style="flex:2;">
+                        <select id="new-user-role" class="filter-select" style="min-width:100px;">
                             <option value="junior">Junior</option>
                             <option value="senior">Senior</option>
                         </select>
+                        <input type="password" id="new-user-password" class="login-input" placeholder="Password (only for brand accounts)" style="flex:1.2;">
                         <button id="create-user-btn" class="role-toggle-btn promote" style="white-space:nowrap;">+ Add User</button>
                     </div>
+                    <p style="font-size:0.7rem;color:var(--text-muted);margin:6px 0 0;">Leave password empty for Google users. Fill password only for brand/external accounts.</p>
                     <div id="create-user-error" class="login-error hidden" style="margin-top:6px;font-size:0.8rem;"></div>
                 </div>
 
