@@ -1104,3 +1104,146 @@ body {
     background: rgba(168, 85, 247, 0.1);
     color: #a855f7;
 }
+
+/* ─── Brand Management ─── */
+.bm-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+    font-size: 0.85rem;
+}
+
+.bm-crumb {
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.15s;
+}
+
+.bm-crumb:hover { color: var(--accent); }
+.bm-crumb.active { color: var(--text-primary); font-weight: 600; cursor: default; }
+.bm-crumb-sep { color: var(--text-muted); font-size: 1rem; }
+
+.bm-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.bm-toolbar h3 { margin: 0; }
+
+.bm-add-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 8px;
+    background: var(--accent);
+    color: white;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.bm-add-btn:hover {
+    background: var(--accent-hover);
+    transform: translateY(-1px);
+}
+
+.bm-cancel-btn {
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.bm-cancel-btn:hover {
+    border-color: var(--danger);
+    color: var(--danger);
+}
+
+.bm-add-form {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 16px;
+}
+
+.bm-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.bm-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.bm-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.12);
+}
+
+.bm-card-name {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.bm-card-email {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+}
+
+.bm-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+}
+
+.bm-card-count {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.bm-status {
+    display: inline-flex;
+    padding: 3px 10px;
+    border-radius: 100px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.bm-status-active { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
+.bm-status-completed { background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
+.bm-status-paused { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+.bm-status-draft { background: var(--surface-alt); color: var(--text-muted); border: 1px solid var(--border); }
+.bm-status-pending { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+.bm-status-in_progress { background: rgba(99, 102, 241, 0.1); color: #6366f1; }
+.bm-status-delivered { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
+.bm-status-approved { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+
+.bm-empty {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}

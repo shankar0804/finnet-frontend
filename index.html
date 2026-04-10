@@ -114,6 +114,12 @@
                     </svg>
                     <span>AI Search</span>
                 </button>
+                <button class="nav-btn hidden" id="nav-brand-mgmt-btn" data-tab="tab-brand-mgmt">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                    <span>Brand Mgmt</span>
+                </button>
                 <button class="nav-btn hidden" id="nav-team-btn" data-tab="tab-team">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
@@ -383,6 +389,133 @@
 
             <div id="ai-search-error" class="hidden"
                 style="padding: 12px 16px; background: var(--danger-light); border: 1px solid #fecaca; border-radius: var(--radius-sm); color: var(--danger); font-size: 0.9rem; margin-top: 12px;">
+            </div>
+        </section>
+
+        <!-- TAB: Brand Management -->
+        <section id="tab-brand-mgmt" class="tab-pane">
+            <header class="page-header">
+                <h1>Brand Management</h1>
+                <p>Manage partnerships, campaigns, and creator assignments.</p>
+            </header>
+
+            <!-- Breadcrumb Navigation -->
+            <div class="bm-breadcrumb" id="bm-breadcrumb">
+                <span class="bm-crumb active" id="bm-crumb-partnerships">Partnerships</span>
+                <span class="bm-crumb-sep hidden" id="bm-sep1">›</span>
+                <span class="bm-crumb hidden" id="bm-crumb-campaigns"></span>
+                <span class="bm-crumb-sep hidden" id="bm-sep2">›</span>
+                <span class="bm-crumb hidden" id="bm-crumb-entries"></span>
+            </div>
+
+            <!-- Level 1: Partnerships -->
+            <div id="bm-partnerships" class="bm-level">
+                <div class="bm-toolbar">
+                    <h3>Partnerships</h3>
+                    <button class="bm-add-btn" id="bm-add-partnership-btn">+ Add Partnership</button>
+                </div>
+                <div class="bm-add-form hidden" id="bm-add-partnership-form">
+                    <div class="form-row">
+                        <input type="text" id="bm-p-name" class="login-input" placeholder="Brand name *" style="flex:1.5;">
+                        <input type="email" id="bm-p-email" class="login-input" placeholder="Brand contact email" style="flex:1.2;">
+                        <select id="bm-p-status" class="filter-select" style="min-width:100px;">
+                            <option value="active">Active</option>
+                            <option value="paused">Paused</option>
+                        </select>
+                        <button class="bm-add-btn" id="bm-p-submit">Create</button>
+                        <button class="bm-cancel-btn" id="bm-p-cancel">Cancel</button>
+                    </div>
+                    <input type="text" id="bm-p-notes" class="login-input" placeholder="Notes (optional)" style="margin-top:8px;width:100%;">
+                    <div id="bm-p-error" class="login-error hidden" style="margin-top:6px;font-size:0.8rem;"></div>
+                </div>
+                <div id="bm-partnerships-grid" class="bm-grid">
+                    <!-- JS populated -->
+                </div>
+            </div>
+
+            <!-- Level 2: Campaigns -->
+            <div id="bm-campaigns" class="bm-level hidden">
+                <div class="bm-toolbar">
+                    <h3 id="bm-campaigns-title">Campaigns</h3>
+                    <button class="bm-add-btn" id="bm-add-campaign-btn">+ Add Campaign</button>
+                </div>
+                <div class="bm-add-form hidden" id="bm-add-campaign-form">
+                    <div class="form-row">
+                        <input type="text" id="bm-c-name" class="login-input" placeholder="Campaign name *" style="flex:1.5;">
+                        <select id="bm-c-platform" class="filter-select" style="min-width:110px;">
+                            <option value="Instagram">Instagram</option>
+                            <option value="YouTube">YouTube</option>
+                            <option value="Twitter">Twitter</option>
+                            <option value="LinkedIn">LinkedIn</option>
+                        </select>
+                        <input type="date" id="bm-c-start" class="login-input" title="Start date" style="flex:0.8;">
+                        <input type="date" id="bm-c-end" class="login-input" title="End date" style="flex:0.8;">
+                        <input type="number" id="bm-c-budget" class="login-input" placeholder="Budget ₹" style="flex:0.6;">
+                        <button class="bm-add-btn" id="bm-c-submit">Create</button>
+                        <button class="bm-cancel-btn" id="bm-c-cancel">Cancel</button>
+                    </div>
+                    <div id="bm-c-error" class="login-error hidden" style="margin-top:6px;font-size:0.8rem;"></div>
+                </div>
+                <div class="table-container">
+                    <table class="roster-table" id="bm-campaigns-table">
+                        <thead>
+                            <tr>
+                                <th>Campaign</th>
+                                <th>Platform</th>
+                                <th>Status</th>
+                                <th>Dates</th>
+                                <th>Budget</th>
+                                <th>Entries</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bm-campaigns-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Level 3: Entries -->
+            <div id="bm-entries" class="bm-level hidden">
+                <div class="bm-toolbar">
+                    <h3 id="bm-entries-title">Entries</h3>
+                    <button class="bm-add-btn" id="bm-add-entry-btn">+ Add Entry</button>
+                </div>
+                <div class="bm-add-form hidden" id="bm-add-entry-form">
+                    <div class="form-row">
+                        <input type="text" id="bm-e-username" class="login-input" placeholder="@creator_username *" style="flex:1;">
+                        <select id="bm-e-type" class="filter-select" style="min-width:90px;">
+                            <option value="Reel">Reel</option>
+                            <option value="Story">Story</option>
+                            <option value="Post">Post</option>
+                            <option value="Video">Video</option>
+                            <option value="Other">Other</option>
+                        </select>
+                        <input type="number" id="bm-e-amount" class="login-input" placeholder="₹ Amount" style="flex:0.6;">
+                        <input type="text" id="bm-e-poc" class="login-input" placeholder="PoC (Finnet)" style="flex:0.8;">
+                        <input type="date" id="bm-e-delivery" class="login-input" title="Delivery date" style="flex:0.7;">
+                        <button class="bm-add-btn" id="bm-e-submit">Add</button>
+                        <button class="bm-cancel-btn" id="bm-e-cancel">Cancel</button>
+                    </div>
+                    <input type="text" id="bm-e-link" class="login-input" placeholder="Content link (optional)" style="margin-top:8px;width:100%;">
+                    <div id="bm-e-error" class="login-error hidden" style="margin-top:6px;font-size:0.8rem;"></div>
+                </div>
+                <div class="table-container">
+                    <table class="roster-table" id="bm-entries-table">
+                        <thead>
+                            <tr>
+                                <th>Creator</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                                <th>Amount</th>
+                                <th>PoC</th>
+                                <th>Delivery</th>
+                                <th>Link</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bm-entries-tbody"></tbody>
+                    </table>
+                </div>
             </div>
         </section>
 

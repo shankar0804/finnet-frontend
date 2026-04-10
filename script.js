@@ -212,10 +212,12 @@ function unlockDashboard(user) {
             brandBtn.click(); // Auto-switch to brand tab
         }
     } else {
-        // Internal users: show Team tab for admin/senior
+        // Internal users: show Team + Brand Mgmt tabs for admin/senior
         if (role === 'admin' || role === 'senior') {
             const teamBtn = document.getElementById('nav-team-btn');
             if (teamBtn) teamBtn.classList.remove('hidden');
+            const bmBtn = document.getElementById('nav-brand-mgmt-btn');
+            if (bmBtn) bmBtn.classList.remove('hidden');
         }
     }
 }
@@ -670,6 +672,299 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (auditFilterOp) auditFilterOp.addEventListener('change', renderAuditLogs);
     if (auditRefreshBtn) auditRefreshBtn.addEventListener('click', loadAuditLogs);
+
+    // ═══════════════════════════════════════════════════
+    // BRAND MANAGEMENT MODULE
+    // ═══════════════════════════════════════════════════
+    const BM = {
+        currentPartnership: null,
+        currentCampaign: null,
+    };
+
+    const fmtDate = d => d ? new Date(d).toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'2-digit'}) : '—';
+    const fmtMoney = n => n ? `₹${Number(n).toLocaleString('en-IN')}` : '—';
+    const bmStatus = s => `<span class="bm-status bm-status-${s}">${s.replace('_',' ')}</span>`;
+
+    // ─── Level Navigation ───
+    function bmShowLevel(level) {
+        document.getElementById('bm-partnerships').classList.toggle('hidden', level !== 'partnerships');
+        document.getElementById('bm-campaigns').classList.toggle('hidden', level !== 'campaigns');
+        document.getElementById('bm-entries').classList.toggle('hidden', level !== 'entries');
+        // Breadcrumbs
+        const sep1 = document.getElementById('bm-sep1');
+        const sep2 = document.getElementById('bm-sep2');
+        const crumbC = document.getElementById('bm-crumb-campaigns');
+        const crumbE = document.getElementById('bm-crumb-entries');
+        const crumbP = document.getElementById('bm-crumb-partnerships');
+        crumbP.classList.toggle('active', level === 'partnerships');
+        if (level === 'partnerships') {
+            sep1.classList.add('hidden'); crumbC.classList.add('hidden');
+            sep2.classList.add('hidden'); crumbE.classList.add('hidden');
+        } else if (level === 'campaigns') {
+            sep1.classList.remove('hidden'); crumbC.classList.remove('hidden');
+            crumbC.classList.add('active');
+            sep2.classList.add('hidden'); crumbE.classList.add('hidden');
+        } else {
+            sep1.classList.remove('hidden'); crumbC.classList.remove('hidden');
+            crumbC.classList.remove('active');
+            sep2.classList.remove('hidden'); crumbE.classList.remove('hidden');
+            crumbE.classList.add('active');
+        }
+    }
+
+    // Breadcrumb clicks
+    document.getElementById('bm-crumb-partnerships')?.addEventListener('click', () => {
+        bmShowLevel('partnerships'); bmLoadPartnerships();
+    });
+    document.getElementById('bm-crumb-campaigns')?.addEventListener('click', () => {
+        if (BM.currentPartnership) { bmShowLevel('campaigns'); bmLoadCampaigns(BM.currentPartnership.id); }
+    });
+
+    // ─── Partnerships ───
+    async function bmLoadPartnerships() {
+        const grid = document.getElementById('bm-partnerships-grid');
+        grid.innerHTML = '<div class="bm-empty">Loading partnerships...</div>';
+        try {
+            const res = await fetch(`${API_BASE}/api/partnerships`, {headers: authHeaders()});
+            const data = await res.json();
+            if (!res.ok) { grid.innerHTML = `<div class="bm-empty">${data.error||'Error'}</div>`; return; }
+            if (!data.length) { grid.innerHTML = '<div class="bm-empty">No partnerships yet. Click "+ Add Partnership" to get started.</div>'; return; }
+            grid.innerHTML = '';
+            data.forEach(p => {
+                const card = document.createElement('div');
+                card.className = 'bm-card';
+                card.innerHTML = `
+                    <div class="bm-card-name">${p.brand_name}</div>
+                    <div class="bm-card-email">${p.contact_email || 'No contact email'}</div>
+                    ${bmStatus(p.status)}
+                    <div class="bm-card-footer">
+                        <span class="bm-card-count">${p.campaign_count || 0} campaign${p.campaign_count !== 1 ? 's' : ''}</span>
+                        <span style="font-size:0.7rem;color:var(--text-muted);">${fmtDate(p.created_at)}</span>
+                    </div>`;
+                card.addEventListener('click', () => {
+                    BM.currentPartnership = p;
+                    document.getElementById('bm-crumb-campaigns').textContent = p.brand_name;
+                    document.getElementById('bm-campaigns-title').textContent = `Campaigns — ${p.brand_name}`;
+                    bmShowLevel('campaigns');
+                    bmLoadCampaigns(p.id);
+                });
+                grid.appendChild(card);
+            });
+        } catch(e) {
+            grid.innerHTML = '<div class="bm-empty">Network error.</div>';
+        }
+    }
+
+    // Add partnership form
+    const addPBtn = document.getElementById('bm-add-partnership-btn');
+    const addPForm = document.getElementById('bm-add-partnership-form');
+    addPBtn?.addEventListener('click', () => addPForm.classList.toggle('hidden'));
+    document.getElementById('bm-p-cancel')?.addEventListener('click', () => addPForm.classList.add('hidden'));
+    document.getElementById('bm-p-submit')?.addEventListener('click', async () => {
+        const name = document.getElementById('bm-p-name').value.trim();
+        const errEl = document.getElementById('bm-p-error');
+        errEl.classList.add('hidden');
+        if (!name) { errEl.textContent = 'Brand name is required.'; errEl.classList.remove('hidden'); return; }
+        try {
+            const res = await fetch(`${API_BASE}/api/partnerships`, {
+                method: 'POST', headers: authHeaders({'Content-Type':'application/json'}),
+                body: JSON.stringify({
+                    brand_name: name,
+                    contact_email: document.getElementById('bm-p-email').value.trim(),
+                    status: document.getElementById('bm-p-status').value,
+                    notes: document.getElementById('bm-p-notes').value.trim(),
+                })
+            });
+            if (!res.ok) { const d=await res.json(); errEl.textContent=d.error||'Error'; errEl.classList.remove('hidden'); return; }
+            addPForm.classList.add('hidden');
+            document.getElementById('bm-p-name').value = '';
+            document.getElementById('bm-p-email').value = '';
+            document.getElementById('bm-p-notes').value = '';
+            bmLoadPartnerships();
+        } catch { errEl.textContent='Network error.'; errEl.classList.remove('hidden'); }
+    });
+
+    // ─── Campaigns ───
+    async function bmLoadCampaigns(pid) {
+        const tbody = document.getElementById('bm-campaigns-tbody');
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-muted);">Loading...</td></tr>';
+        try {
+            const res = await fetch(`${API_BASE}/api/partnerships/${pid}/campaigns`, {headers: authHeaders()});
+            const data = await res.json();
+            if (!res.ok) { tbody.innerHTML = `<tr><td colspan="7" class="bm-empty">${data.error||'Error'}</td></tr>`; return; }
+            if (!data.length) { tbody.innerHTML = '<tr><td colspan="7" class="bm-empty">No campaigns yet.</td></tr>'; return; }
+            tbody.innerHTML = '';
+            data.forEach(c => {
+                const tr = document.createElement('tr');
+                tr.style.cursor = 'pointer';
+                const dates = `${fmtDate(c.start_date)} — ${fmtDate(c.end_date)}`;
+                tr.innerHTML = `
+                    <td><strong>${c.campaign_name}</strong></td>
+                    <td>${c.platform}</td>
+                    <td>${bmStatus(c.status)}</td>
+                    <td style="font-size:0.8rem;">${dates}</td>
+                    <td>${fmtMoney(c.budget)}</td>
+                    <td>${c.entry_count || 0}</td>
+                    <td><button class="bm-add-btn" style="font-size:0.7rem;padding:4px 10px;" onclick="event.stopPropagation();">View →</button></td>`;
+                tr.addEventListener('click', () => {
+                    BM.currentCampaign = c;
+                    document.getElementById('bm-crumb-entries').textContent = c.campaign_name;
+                    document.getElementById('bm-entries-title').textContent = `Entries — ${c.campaign_name}`;
+                    bmShowLevel('entries');
+                    bmLoadEntries(c.id);
+                });
+                tbody.appendChild(tr);
+            });
+        } catch { tbody.innerHTML = '<tr><td colspan="7" class="bm-empty">Network error.</td></tr>'; }
+    }
+
+    // Add campaign form
+    const addCBtn = document.getElementById('bm-add-campaign-btn');
+    const addCForm = document.getElementById('bm-add-campaign-form');
+    addCBtn?.addEventListener('click', () => addCForm.classList.toggle('hidden'));
+    document.getElementById('bm-c-cancel')?.addEventListener('click', () => addCForm.classList.add('hidden'));
+    document.getElementById('bm-c-submit')?.addEventListener('click', async () => {
+        const name = document.getElementById('bm-c-name').value.trim();
+        const errEl = document.getElementById('bm-c-error');
+        errEl.classList.add('hidden');
+        if (!name) { errEl.textContent = 'Campaign name required.'; errEl.classList.remove('hidden'); return; }
+        try {
+            const res = await fetch(`${API_BASE}/api/campaigns`, {
+                method: 'POST', headers: authHeaders({'Content-Type':'application/json'}),
+                body: JSON.stringify({
+                    partnership_id: BM.currentPartnership.id,
+                    campaign_name: name,
+                    platform: document.getElementById('bm-c-platform').value,
+                    start_date: document.getElementById('bm-c-start').value || null,
+                    end_date: document.getElementById('bm-c-end').value || null,
+                    budget: parseFloat(document.getElementById('bm-c-budget').value) || 0,
+                })
+            });
+            if (!res.ok) { const d=await res.json(); errEl.textContent=d.error||'Error'; errEl.classList.remove('hidden'); return; }
+            addCForm.classList.add('hidden');
+            document.getElementById('bm-c-name').value='';
+            document.getElementById('bm-c-budget').value='';
+            bmLoadCampaigns(BM.currentPartnership.id);
+        } catch { errEl.textContent='Network error.'; errEl.classList.remove('hidden'); }
+    });
+
+    // ─── Entries ───
+    async function bmLoadEntries(cid) {
+        const tbody = document.getElementById('bm-entries-tbody');
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-muted);">Loading...</td></tr>';
+        try {
+            const res = await fetch(`${API_BASE}/api/campaigns/${cid}/entries`, {headers: authHeaders()});
+            const data = await res.json();
+            if (!res.ok) { tbody.innerHTML = `<tr><td colspan="8" class="bm-empty">${data.error||'Error'}</td></tr>`; return; }
+            if (!data.length) { tbody.innerHTML = '<tr><td colspan="8" class="bm-empty">No entries yet.</td></tr>'; return; }
+            tbody.innerHTML = '';
+            data.forEach(e => {
+                const tr = document.createElement('tr');
+                const creatorDisplay = e.creator_name
+                    ? `<strong>${e.creator_username}</strong><br><span style="font-size:0.7rem;color:var(--text-muted);">${e.creator_name} · ${Number(e.followers||0).toLocaleString()} followers</span>`
+                    : `<strong>${e.creator_username}</strong>`;
+                const linkHtml = e.content_link ? `<a href="${e.content_link}" target="_blank" style="color:var(--accent);font-size:0.8rem;">View ↗</a>` : '—';
+                const statusSelect = `<select class="filter-select" style="font-size:0.75rem;padding:4px 6px;" onchange="window._bmUpdateEntryStatus('${e.id}','${cid}',this.value)">
+                    <option value="pending" ${e.status==='pending'?'selected':''}>Pending</option>
+                    <option value="in_progress" ${e.status==='in_progress'?'selected':''}>In Progress</option>
+                    <option value="delivered" ${e.status==='delivered'?'selected':''}>Delivered</option>
+                    <option value="approved" ${e.status==='approved'?'selected':''}>Approved</option>
+                </select>`;
+                tr.innerHTML = `
+                    <td>${creatorDisplay}</td>
+                    <td><span class="bm-status bm-status-draft">${e.deliverable_type}</span></td>
+                    <td>${statusSelect}</td>
+                    <td>${fmtMoney(e.amount)}</td>
+                    <td style="font-size:0.8rem;">${e.poc || '—'}</td>
+                    <td style="font-size:0.8rem;">${fmtDate(e.delivery_date)}</td>
+                    <td>${linkHtml}</td>
+                    <td><button class="bm-cancel-btn" style="font-size:0.7rem;padding:3px 8px;color:var(--danger);" onclick="window._bmDeleteEntry('${e.id}','${cid}')">✕</button></td>`;
+                tbody.appendChild(tr);
+            });
+        } catch { tbody.innerHTML = '<tr><td colspan="8" class="bm-empty">Network error.</td></tr>'; }
+    }
+
+    // Add entry form
+    const addEBtn = document.getElementById('bm-add-entry-btn');
+    const addEForm = document.getElementById('bm-add-entry-form');
+    addEBtn?.addEventListener('click', () => addEForm.classList.toggle('hidden'));
+    document.getElementById('bm-e-cancel')?.addEventListener('click', () => addEForm.classList.add('hidden'));
+    document.getElementById('bm-e-submit')?.addEventListener('click', async () => {
+        const username = document.getElementById('bm-e-username').value.trim().replace(/^@/,'');
+        const errEl = document.getElementById('bm-e-error');
+        errEl.classList.add('hidden');
+        if (!username) { errEl.textContent = 'Creator username required.'; errEl.classList.remove('hidden'); return; }
+        try {
+            const res = await fetch(`${API_BASE}/api/entries`, {
+                method: 'POST', headers: authHeaders({'Content-Type':'application/json'}),
+                body: JSON.stringify({
+                    campaign_id: BM.currentCampaign.id,
+                    creator_username: username,
+                    deliverable_type: document.getElementById('bm-e-type').value,
+                    amount: parseFloat(document.getElementById('bm-e-amount').value) || 0,
+                    poc: document.getElementById('bm-e-poc').value.trim(),
+                    delivery_date: document.getElementById('bm-e-delivery').value || null,
+                    content_link: document.getElementById('bm-e-link').value.trim(),
+                })
+            });
+            if (!res.ok) { const d=await res.json(); errEl.textContent=d.error||'Error'; errEl.classList.remove('hidden'); return; }
+            addEForm.classList.add('hidden');
+            document.getElementById('bm-e-username').value='';
+            document.getElementById('bm-e-amount').value='';
+            document.getElementById('bm-e-poc').value='';
+            document.getElementById('bm-e-link').value='';
+            bmLoadEntries(BM.currentCampaign.id);
+        } catch { errEl.textContent='Network error.'; errEl.classList.remove('hidden'); }
+    });
+
+    // Inline entry status update
+    window._bmUpdateEntryStatus = async (eid, cid, status) => {
+        try {
+            await fetch(`${API_BASE}/api/entries/${eid}`, {
+                method: 'PUT', headers: authHeaders({'Content-Type':'application/json'}),
+                body: JSON.stringify({status})
+            });
+        } catch(e) { console.error(e); }
+    };
+
+    // Delete entry
+    window._bmDeleteEntry = async (eid, cid) => {
+        if (!confirm('Delete this entry?')) return;
+        try {
+            await fetch(`${API_BASE}/api/entries/${eid}`, {method:'DELETE', headers: authHeaders()});
+            bmLoadEntries(cid);
+        } catch(e) { console.error(e); }
+    };
+
+    // Auto-load brand management when tab is clicked
+    document.getElementById('nav-brand-mgmt-btn')?.addEventListener('click', () => {
+        bmShowLevel('partnerships');
+        bmLoadPartnerships();
+    });
+
+    // Also load for brand users in Brand Portal
+    if (window._userRole === 'brand') {
+        // Reuse partnerships API — brand users auto-filtered by backend
+        const portalContainer = document.querySelector('#tab-brand .card');
+        if (portalContainer) {
+            fetch(`${API_BASE}/api/partnerships`, {headers: authHeaders()})
+                .then(r => r.json())
+                .then(data => {
+                    if (!Array.isArray(data) || !data.length) return;
+                    portalContainer.innerHTML = '<h3 style="margin-bottom:16px;">Your Partnerships</h3>';
+                    data.forEach(p => {
+                        portalContainer.innerHTML += `<div class="bm-card" style="margin-bottom:12px;cursor:default;">
+                            <div class="bm-card-name">${p.brand_name}</div>
+                            ${bmStatus(p.status)}
+                            <div class="bm-card-footer">
+                                <span class="bm-card-count">${p.campaign_count||0} campaigns</span>
+                                <span style="font-size:0.7rem;color:var(--text-muted);">${fmtDate(p.created_at)}</span>
+                            </div>
+                        </div>`;
+                    });
+                }).catch(() => {});
+        }
+    }
 
     // Auto-load admin/senior panels
     if (window._userRole === 'admin' || window._userRole === 'senior') {
