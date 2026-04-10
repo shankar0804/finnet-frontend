@@ -120,6 +120,12 @@
                     </svg>
                     <span>Team</span>
                 </button>
+                <button class="nav-btn hidden" id="nav-brand-btn" data-tab="tab-brand">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a4 4 0 0 0-8 0v2"/>
+                    </svg>
+                    <span>Brand Portal</span>
+                </button>
             </div>
 
             <div class="nav-end" id="nav-end">
@@ -394,10 +400,11 @@
                         <span class="role-badge role-admin">Admin</span>
                         <span class="role-badge role-senior">Senior</span>
                         <span class="role-badge role-junior">Junior</span>
+                        <span class="role-badge role-brand">Brand</span>
                     </div>
                 </div>
 
-                <!-- Add User / Pre-assign Role -->
+                <!-- Add User Form -->
                 <div class="create-user-form" id="create-user-form">
                     <div class="form-row">
                         <input type="email" id="new-user-email" class="login-input" placeholder="Email address" style="flex:2;">
@@ -405,10 +412,10 @@
                             <option value="junior">Junior</option>
                             <option value="senior">Senior</option>
                         </select>
-                        <input type="password" id="new-user-password" class="login-input" placeholder="Password (only for brand accounts)" style="flex:1.2;">
+                        <input type="password" id="new-user-password" class="login-input" placeholder="Password (brand account)" style="flex:1.2;">
                         <button id="create-user-btn" class="role-toggle-btn promote" style="white-space:nowrap;">+ Add User</button>
                     </div>
-                    <p style="font-size:0.7rem;color:var(--text-muted);margin:6px 0 0;">Leave password empty for Google users. Fill password only for brand/external accounts.</p>
+                    <p id="create-user-hint" style="font-size:0.7rem;color:var(--text-muted);margin:6px 0 0;"></p>
                     <div id="create-user-error" class="login-error hidden" style="margin-top:6px;font-size:0.8rem;"></div>
                 </div>
 
@@ -470,6 +477,19 @@
                         </tbody>
                     </table>
                 </div>
+            </div>
+        </section>
+
+        <!-- TAB 5: Brand Portal (Brand Users Only) -->
+        <section id="tab-brand" class="tab-pane">
+            <header class="page-header">
+                <h1>Brand Portal</h1>
+                <p>Your dedicated brand dashboard is coming soon.</p>
+            </header>
+            <div class="card" style="text-align:center;padding:60px 24px;">
+                <div style="font-size:3rem;margin-bottom:16px;">🚀</div>
+                <h3 style="margin-bottom:8px;">Coming Soon</h3>
+                <p style="color:var(--text-muted);max-width:400px;margin:0 auto;">We're building your brand dashboard with campaign insights, creator analytics, and collaboration tools. Stay tuned!</p>
             </div>
         </section>
 

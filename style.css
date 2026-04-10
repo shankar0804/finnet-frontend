@@ -850,6 +850,11 @@ body {
     border: 1px solid var(--border);
 }
 
+.role-brand {
+    background: rgba(168, 85, 247, 0.1);
+    color: #a855f7;
+}
+
 .team-user-cell {
     display: flex;
     align-items: center;

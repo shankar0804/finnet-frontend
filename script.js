@@ -196,15 +196,28 @@ function unlockDashboard(user) {
         else if (avatarEl) { avatarEl.style.display = 'none'; }
         profileEl.classList.remove('hidden');
     }
-    // Show Team tab for admin and senior
+
     const role = user.role || 'junior';
-    if (role === 'admin' || role === 'senior') {
-        const teamBtn = document.getElementById('nav-team-btn');
-        if (teamBtn) teamBtn.classList.remove('hidden');
-    }
-    // Store role globally for other functions
     window._userRole = role;
     window._userEmail = user.email;
+
+    if (role === 'brand') {
+        // Brand users: hide all internal tabs, show only Brand Portal
+        document.querySelectorAll('.nav-btn[data-tab]').forEach(btn => {
+            btn.classList.add('hidden');
+        });
+        const brandBtn = document.getElementById('nav-brand-btn');
+        if (brandBtn) {
+            brandBtn.classList.remove('hidden');
+            brandBtn.click(); // Auto-switch to brand tab
+        }
+    } else {
+        // Internal users: show Team tab for admin/senior
+        if (role === 'admin' || role === 'senior') {
+            const teamBtn = document.getElementById('nav-team-btn');
+            if (teamBtn) teamBtn.classList.remove('hidden');
+        }
+    }
 }
 
 function signOut() {
@@ -457,8 +470,20 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // ─── Team Management (Admin Only) ───
+    // ─── Team Management (Admin / Senior) ───
     const teamTbody = document.getElementById('team-tbody');
+    const roleSelect = document.getElementById('new-user-role');
+    const pwdInput = document.getElementById('new-user-password');
+    const hintEl = document.getElementById('create-user-hint');
+
+    // Customize form based on role
+    if (window._userRole === 'senior') {
+        // Senior: can only add brand accounts → hide role dropdown, require password
+        if (roleSelect) roleSelect.style.display = 'none';
+        if (hintEl) hintEl.textContent = 'Enter brand email + password to create a brand account.';
+    } else if (window._userRole === 'admin') {
+        if (hintEl) hintEl.textContent = 'Password empty = Google (internal). Password filled = Brand account.';
+    }
 
     const formatDate = (ts) => {
         if (!ts) return '-';
@@ -479,14 +504,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 const tr = document.createElement('tr');
                 const isAdmin = u.role === 'admin';
                 const isSenior = u.role === 'senior';
-                const roleBadgeClass = isAdmin ? 'role-admin' : isSenior ? 'role-senior' : 'role-junior';
+                const isBrand = u.role === 'brand';
+                const roleBadgeClass = isAdmin ? 'role-admin' : isSenior ? 'role-senior' : isBrand ? 'role-brand' : 'role-junior';
                 const authMethod = u.auth_method || 'google';
                 const authBadge = authMethod === 'password'
                     ? '<span class="auth-badge auth-password">Password</span>'
                     : '<span class="auth-badge auth-google">Google</span>';
 
                 let actionHtml = '';
-                if (isAdmin) {
+                if (isAdmin || isBrand) {
                     actionHtml = '<span style="color:var(--text-muted);font-size:0.8rem;">—</span>';
                 } else if (isSenior) {
                     actionHtml = `<button class="role-toggle-btn demote" onclick="window._toggleRole('${u.email}', 'junior')">Demote to Junior</button>`;
