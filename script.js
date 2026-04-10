@@ -1,7 +1,243 @@
 // ═══ TRAKR Frontend — All API calls go to the Render backend ═══
 const API_BASE = 'https://finnet-backend.onrender.com';
+const ALLOWED_DOMAIN = 'finnetmedia.com';
+
+// ─── JWT Token Helper ───
+function getToken() { return sessionStorage.getItem('trakr_token') || ''; }
+function authHeaders(extra = {}) {
+    const token = getToken();
+    const headers = { ...extra };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return headers;
+}
+
+// ─── Copy / Select Protection (keyboard shortcuts) ───
+document.addEventListener('keydown', (e) => {
+    // Block Ctrl+C, Ctrl+X, Ctrl+A, Ctrl+U, Ctrl+S, Ctrl+P
+    if (e.ctrlKey && ['c','x','a','u','s','p'].includes(e.key.toLowerCase())) {
+        e.preventDefault();
+        return false;
+    }
+    // Block F12 / Ctrl+Shift+I (dev tools) — optional, remove if annoying during dev
+    if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'i')) {
+        e.preventDefault();
+        return false;
+    }
+});
+
+// ─── Google Sign-In Callback (must be global) ───
+function handleGoogleSignIn(response) {
+    try {
+        // Decode JWT payload (base64url → JSON)
+        const payload = JSON.parse(atob(response.credential.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+        const email = payload.email || '';
+        const domain = email.split('@')[1] || '';
+
+        if (domain.toLowerCase() !== ALLOWED_DOMAIN) {
+            const errEl = document.getElementById('login-error');
+            errEl.textContent = `Access denied. "${email}" is not a @${ALLOWED_DOMAIN} account.`;
+            errEl.classList.remove('hidden');
+            return;
+        }
+
+        // Register with backend to get role
+        fetch(`${API_BASE}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: payload.email,
+                name: payload.name || payload.email.split('@')[0],
+                picture: payload.picture || ''
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                const errEl = document.getElementById('login-error');
+                errEl.textContent = data.error;
+                errEl.classList.remove('hidden');
+                return;
+            }
+
+            const userObj = {
+                email: payload.email,
+                name: payload.name || payload.email.split('@')[0],
+                picture: payload.picture || '',
+                role: data.role || 'junior',
+                exp: payload.exp
+            };
+            // Store JWT token from backend
+            if (data.token) sessionStorage.setItem('trakr_token', data.token);
+            sessionStorage.setItem('trakr_user', JSON.stringify(userObj));
+            unlockDashboard(userObj);
+            // Reload roster with correct role
+            if (window._fetchRosterData) window._fetchRosterData();
+            // Load team tab if admin
+            if (userObj.role === 'admin' && window._loadTeam) window._loadTeam();
+        })
+        .catch(err => {
+            console.error('Backend login error:', err);
+            // Still allow access with junior role as fallback
+            const userObj = {
+                email: payload.email,
+                name: payload.name || payload.email.split('@')[0],
+                picture: payload.picture || '',
+                role: 'junior',
+                exp: payload.exp
+            };
+            sessionStorage.setItem('trakr_user', JSON.stringify(userObj));
+            unlockDashboard(userObj);
+        });
+
+    } catch (err) {
+        console.error('Sign-in error:', err);
+        const errEl = document.getElementById('login-error');
+        errEl.textContent = 'Sign-in failed. Please try again.';
+        errEl.classList.remove('hidden');
+    }
+}
+
+// ─── Password Login Handler ───
+async function handlePasswordLogin() {
+    const email = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+    const errEl = document.getElementById('login-error');
+    const btn = document.getElementById('login-password-btn');
+
+    errEl.classList.add('hidden');
+
+    if (!email || !password) {
+        errEl.textContent = 'Please enter email and password.';
+        errEl.classList.remove('hidden');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Signing in...';
+
+    try {
+        const res = await fetch(`${API_BASE}/api/auth/login-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+            errEl.textContent = data.error || 'Login failed';
+            errEl.classList.remove('hidden');
+            return;
+        }
+
+        const userObj = {
+            email: data.email,
+            name: data.name || data.email.split('@')[0],
+            picture: '',
+            role: data.role || 'junior',
+        };
+        if (data.token) sessionStorage.setItem('trakr_token', data.token);
+        sessionStorage.setItem('trakr_user', JSON.stringify(userObj));
+        unlockDashboard(userObj);
+        if (window._fetchRosterData) window._fetchRosterData();
+        if (userObj.role === 'admin' && window._loadTeam) window._loadTeam();
+    } catch (e) {
+        errEl.textContent = 'Network error. Try again.';
+        errEl.classList.remove('hidden');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Sign In';
+    }
+}
+
+// ─── Login Flow Navigation ───
+document.addEventListener('DOMContentLoaded', () => {
+    const selector = document.getElementById('login-selector');
+    const googleSection = document.getElementById('login-google-section');
+    const pwdSection = document.getElementById('login-password-section');
+    const errEl = document.getElementById('login-error');
+
+    const showSection = (show) => {
+        [selector, googleSection, pwdSection].forEach(s => { if (s) s.classList.add('hidden'); });
+        if (errEl) errEl.classList.add('hidden');
+        if (show) show.classList.remove('hidden');
+    };
+
+    // Role selector buttons
+    const brandBtn = document.getElementById('select-brand-login');
+    const internalBtn = document.getElementById('select-internal-login');
+    if (brandBtn) brandBtn.addEventListener('click', () => showSection(pwdSection));
+    if (internalBtn) internalBtn.addEventListener('click', () => showSection(googleSection));
+
+    // Back buttons
+    const backPwd = document.getElementById('back-from-password');
+    const backGoogle = document.getElementById('back-from-google');
+    if (backPwd) backPwd.addEventListener('click', () => showSection(selector));
+    if (backGoogle) backGoogle.addEventListener('click', () => showSection(selector));
+
+    // Show selector by default
+    if (selector) selector.classList.remove('hidden');
+
+    // Password login handlers
+    const loginBtn = document.getElementById('login-password-btn');
+    if (loginBtn) loginBtn.addEventListener('click', handlePasswordLogin);
+    const loginPwdInput = document.getElementById('login-password');
+    if (loginPwdInput) loginPwdInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') handlePasswordLogin(); });
+});
+
+function unlockDashboard(user) {
+    document.getElementById('login-overlay').classList.add('hidden');
+    // Show user profile in navbar
+    const profileEl = document.getElementById('user-profile');
+    const avatarEl = document.getElementById('user-avatar');
+    const nameEl = document.getElementById('user-name');
+    if (profileEl && nameEl) {
+        nameEl.textContent = user.name || user.email;
+        if (avatarEl && user.picture) { avatarEl.src = user.picture; }
+        else if (avatarEl) { avatarEl.style.display = 'none'; }
+        profileEl.classList.remove('hidden');
+    }
+    // Show Team tab for admin
+    const role = user.role || 'junior';
+    if (role === 'admin') {
+        const teamBtn = document.getElementById('nav-team-btn');
+        if (teamBtn) teamBtn.classList.remove('hidden');
+    }
+    // Store role globally for other functions
+    window._userRole = role;
+    window._userEmail = user.email;
+}
+
+function signOut() {
+    sessionStorage.removeItem('trakr_user');
+    sessionStorage.removeItem('trakr_token');
+    if (window.google?.accounts?.id) {
+        google.accounts.id.disableAutoSelect();
+    }
+    location.reload();
+}
 
 document.addEventListener('DOMContentLoaded', () => {
+
+    // ─── Session Check: auto-unlock if already signed in ───
+    const stored = sessionStorage.getItem('trakr_user');
+    if (stored) {
+        try {
+            const user = JSON.parse(stored);
+            // Check if token hasn't expired (exp is in seconds)
+            if (user.exp && (user.exp * 1000) > Date.now()) {
+                unlockDashboard(user);
+            } else {
+                sessionStorage.removeItem('trakr_user');
+            }
+        } catch (e) {
+            sessionStorage.removeItem('trakr_user');
+        }
+    }
+
+    // ─── Sign-out button ───
+    const signOutBtn = document.getElementById('sign-out-btn');
+    if (signOutBtn) signOutBtn.addEventListener('click', signOut);
+
 
     const navBtns = document.querySelectorAll('.nav-btn');
     const tabPanes = document.querySelectorAll('.tab-pane');
@@ -84,13 +320,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const fetchRosterData = async () => {
         renderSkeleton();
         try {
-            const res = await fetch(`${API_BASE}/api/roster`);
+            const res = await fetch(`${API_BASE}/api/roster`, { headers: authHeaders() });
             if (res.ok) { roster = await res.json(); renderRoster(); }
         } catch (e) {
             console.error("Failed to load roster", e);
             tbody.innerHTML = '<tr><td colspan="32" style="text-align:center;color:var(--danger);padding:40px;">Connection Interrupted.</td></tr>';
         }
     };
+    window._fetchRosterData = fetchRosterData;
 
     window.deleteUser = async (username) => {
         if (!confirm(`Delete @${username}?`)) return;
@@ -218,5 +455,199 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (e) { alert('Export failed'); }
             finally { exportBtn.disabled = false; exportBtn.textContent = '📊 Export to Sheets'; }
         });
+    }
+
+    // ─── Team Management (Admin Only) ───
+    const teamTbody = document.getElementById('team-tbody');
+
+    const formatDate = (ts) => {
+        if (!ts) return '-';
+        try { return new Date(ts).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }); } catch { return '-'; }
+    };
+
+    const loadTeam = async () => {
+        if (window._userRole !== 'admin' || !teamTbody) return;
+        teamTbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted);">Loading team...</td></tr>';
+        try {
+            const res = await fetch(`${API_BASE}/api/users`, { headers: authHeaders() });
+            if (!res.ok) { teamTbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--danger);padding:24px;">Failed to load team.</td></tr>'; return; }
+            const users = await res.json();
+            teamTbody.innerHTML = '';
+            if (!users.length) { teamTbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted);">No team members yet.</td></tr>'; return; }
+
+            users.forEach(u => {
+                const tr = document.createElement('tr');
+                const isAdmin = u.role === 'admin';
+                const isSenior = u.role === 'senior';
+                const roleBadgeClass = isAdmin ? 'role-admin' : isSenior ? 'role-senior' : 'role-junior';
+                const authMethod = u.auth_method || 'google';
+                const authBadge = authMethod === 'password'
+                    ? '<span class="auth-badge auth-password">Password</span>'
+                    : '<span class="auth-badge auth-google">Google</span>';
+
+                let actionHtml = '';
+                if (isAdmin) {
+                    actionHtml = '<span style="color:var(--text-muted);font-size:0.8rem;">—</span>';
+                } else if (isSenior) {
+                    actionHtml = `<button class="role-toggle-btn demote" onclick="window._toggleRole('${u.email}', 'junior')">Demote to Junior</button>`;
+                } else {
+                    actionHtml = `<button class="role-toggle-btn promote" onclick="window._toggleRole('${u.email}', 'senior')">Promote to Senior</button>`;
+                }
+
+                tr.innerHTML = `
+                    <td><div class="team-user-cell">${u.picture ? `<img src="${u.picture}" alt="">` : ''}<span>${u.name || u.email.split('@')[0]}</span></div></td>
+                    <td>${u.email}</td>
+                    <td><span class="role-badge ${roleBadgeClass}">${u.role}</span></td>
+                    <td>${authBadge}</td>
+                    <td style="font-size:0.8rem;">${formatDate(u.created_at)}</td>
+                    <td>${actionHtml}</td>`;
+                teamTbody.appendChild(tr);
+            });
+        } catch (e) {
+            console.error('Failed to load team:', e);
+            teamTbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--danger);padding:24px;">Network error.</td></tr>';
+        }
+    };
+    window._loadTeam = loadTeam;
+
+    // ─── Create External User ───
+    const createUserBtn = document.getElementById('create-user-btn');
+    if (createUserBtn) {
+        createUserBtn.addEventListener('click', async () => {
+            const email = document.getElementById('new-user-email').value.trim();
+            const name = document.getElementById('new-user-name').value.trim();
+            const password = document.getElementById('new-user-password').value;
+            const role = document.getElementById('new-user-role').value;
+            const errEl = document.getElementById('create-user-error');
+            errEl.classList.add('hidden');
+
+            if (!email || !password) {
+                errEl.textContent = 'Email and password are required.';
+                errEl.classList.remove('hidden');
+                return;
+            }
+            if (password.length < 6) {
+                errEl.textContent = 'Password must be at least 6 characters.';
+                errEl.classList.remove('hidden');
+                return;
+            }
+
+            createUserBtn.disabled = true;
+            createUserBtn.textContent = 'Creating...';
+
+            try {
+                const res = await fetch(`${API_BASE}/api/users/create`, {
+                    method: 'POST',
+                    headers: authHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ email, name, password, role })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    errEl.textContent = data.error || 'Failed to create user';
+                    errEl.classList.remove('hidden');
+                } else {
+                    // Clear form and reload team
+                    document.getElementById('new-user-email').value = '';
+                    document.getElementById('new-user-name').value = '';
+                    document.getElementById('new-user-password').value = '';
+                    document.getElementById('new-user-role').value = 'junior';
+                    await loadTeam();
+                }
+            } catch (e) {
+                errEl.textContent = 'Network error.';
+                errEl.classList.remove('hidden');
+            } finally {
+                createUserBtn.disabled = false;
+                createUserBtn.textContent = '+ Add User';
+            }
+        });
+    }
+
+    window._toggleRole = async (email, newRole) => {
+        if (!confirm(`Change ${email} to ${newRole}?`)) return;
+        try {
+            const res = await fetch(`${API_BASE}/api/users/role`, {
+                method: 'POST',
+                headers: authHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify({ email, role: newRole })
+            });
+            const data = await res.json();
+            if (!res.ok) { alert(data.error || 'Failed'); return; }
+            await loadTeam();
+            await loadAuditLogs();
+        } catch (e) { alert('Network error.'); }
+    };
+
+    // ─── Audit Logs (Admin Only) ───
+    const auditTbody = document.getElementById('audit-tbody');
+    const auditFilterOp = document.getElementById('audit-filter-op');
+    const auditRefreshBtn = document.getElementById('audit-refresh-btn');
+    let allAuditLogs = [];
+
+    const OP_COLORS = {
+        'INSERT': 'var(--success)', 'UPSERT': 'var(--success)',
+        'UPDATE': 'var(--accent)', 'DELETE': 'var(--danger)',
+        'LOGIN': '#a78bfa', 'EXPORT': '#f59e0b',
+        'BULK_IMPORT': '#06b6d4',
+    };
+
+    const renderAuditLogs = () => {
+        if (!auditTbody) return;
+        const filter = auditFilterOp ? auditFilterOp.value : '';
+        const filtered = filter ? allAuditLogs.filter(l => l.operation === filter) : allAuditLogs;
+
+        if (!filtered.length) {
+            auditTbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-muted);">No audit logs yet.</td></tr>';
+            return;
+        }
+        auditTbody.innerHTML = '';
+        filtered.forEach(log => {
+            const tr = document.createElement('tr');
+            const opColor = OP_COLORS[log.operation] || 'var(--text-muted)';
+            const detailStr = log.details && Object.keys(log.details).length
+                ? Object.entries(log.details).map(([k,v]) => `${k}: ${v}`).join(', ')
+                : '-';
+            const timeStr = log.created_at
+                ? new Date(log.created_at).toLocaleString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit', hour12:false })
+                : '-';
+            const srcBadge = log.source === 'whatsapp_bot'
+                ? '<span style="color:#22c55e;">bot</span>'
+                : log.source === 'bulk_import' ? '<span style="color:#06b6d4;">bulk</span>'
+                : '<span style="color:var(--text-muted);">dash</span>';
+
+            tr.innerHTML = `
+                <td style="font-size:0.75rem;white-space:nowrap;">${timeStr}</td>
+                <td><span style="color:${opColor};font-weight:700;font-size:0.72rem;text-transform:uppercase;">${log.operation}</span></td>
+                <td style="font-size:0.8rem;">${(log.performed_by || 'system').split('@')[0]}</td>
+                <td style="font-size:0.8rem;color:var(--text-muted);">${log.target_table}</td>
+                <td style="font-size:0.8rem;font-weight:600;">${log.target_id || '-'}</td>
+                <td style="font-size:0.72rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${detailStr}">${detailStr}</td>
+                <td>${srcBadge}</td>
+                <td style="font-size:0.72rem;color:var(--text-muted);">${log.ip_address || '-'}</td>`;
+            auditTbody.appendChild(tr);
+        });
+    };
+
+    const loadAuditLogs = async () => {
+        if (window._userRole !== 'admin' || !auditTbody) return;
+        auditTbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-muted);">Loading audit logs...</td></tr>';
+        try {
+            const res = await fetch(`${API_BASE}/api/audit-logs?limit=200`, { headers: authHeaders() });
+            if (!res.ok) { auditTbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--danger);padding:24px;">Failed to load.</td></tr>'; return; }
+            allAuditLogs = await res.json();
+            renderAuditLogs();
+        } catch (e) {
+            console.error('Audit logs error:', e);
+            auditTbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--danger);padding:24px;">Network error.</td></tr>';
+        }
+    };
+
+    if (auditFilterOp) auditFilterOp.addEventListener('change', renderAuditLogs);
+    if (auditRefreshBtn) auditRefreshBtn.addEventListener('click', loadAuditLogs);
+
+    // Auto-load admin panels
+    if (window._userRole === 'admin') {
+        loadTeam();
+        loadAuditLogs();
     }
 });

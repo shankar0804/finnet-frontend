@@ -8,9 +8,82 @@
     <meta name="description" content="TRAKRX — Premium influencer analytics dashboard for agencies. Track creators, scrape data, and manage your roster.">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./style.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 
-<body>
+<body oncontextmenu="return false" onselectstart="return false" oncopy="return false" oncut="return false">
+    <!-- ═══ Sign-In Gate ═══ -->
+    <div id="login-overlay" class="login-overlay">
+        <div class="login-card">
+            <div class="login-logo">
+                <span class="logo-text" style="font-size: 2rem;">TRAKR<span class="highlight">X</span></span>
+                <p class="login-subtitle">Influencer Intelligence Platform</p>
+            </div>
+            <div class="login-divider"></div>
+
+            <!-- Step 1: Role Selector -->
+            <div id="login-selector">
+                <p class="login-desc">How would you like to sign in?</p>
+                <div class="login-role-cards">
+                    <button class="login-role-card" id="select-brand-login">
+                        <div class="login-role-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a4 4 0 0 0-8 0v2"/></svg>
+                        </div>
+                        <span class="login-role-title">Brand Login</span>
+                        <span class="login-role-sub">For brand partners &amp; external teams</span>
+                    </button>
+                    <button class="login-role-card" id="select-internal-login">
+                        <div class="login-role-icon internal-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                        </div>
+                        <span class="login-role-title">Internal Team</span>
+                        <span class="login-role-sub">Finnet Media employees</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 2a: Brand / Password Login -->
+            <div id="login-password-section" class="hidden">
+                <button class="login-back-btn" id="back-from-password">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+                    Back
+                </button>
+                <p class="login-desc">Sign in with your brand credentials</p>
+                <div class="login-form">
+                    <input type="email" id="login-email" class="login-input" placeholder="Email address" autocomplete="email">
+                    <input type="password" id="login-password" class="login-input" placeholder="Password" autocomplete="current-password">
+                    <button id="login-password-btn" class="login-submit-btn">Sign In</button>
+                </div>
+            </div>
+
+            <!-- Step 2b: Internal / Google Login -->
+            <div id="login-google-section" class="hidden">
+                <button class="login-back-btn" id="back-from-google">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+                    Back
+                </button>
+                <p class="login-desc">Sign in with your <strong>@finnetmedia.com</strong> account</p>
+                <div id="g_id_onload"
+                    data-client_id="851315925686-4h2b4353r0ntkoe2lj00ub66ua20d2nc.apps.googleusercontent.com"
+                    data-callback="handleGoogleSignIn"
+                    data-auto_prompt="false">
+                </div>
+                <div class="g_id_signin"
+                    data-type="standard"
+                    data-shape="pill"
+                    data-theme="outline"
+                    data-text="signin_with"
+                    data-size="large"
+                    data-logo_alignment="left"
+                    data-width="300">
+                </div>
+            </div>
+
+            <div id="login-error" class="login-error hidden"></div>
+            <p class="login-footer">Authorized personnel only.</p>
+        </div>
+    </div>
+
     <!-- ═══ Top Navigation Bar ═══ -->
     <nav class="top-nav">
         <div class="nav-inner">
@@ -41,6 +114,12 @@
                     </svg>
                     <span>AI Search</span>
                 </button>
+                <button class="nav-btn hidden" id="nav-team-btn" data-tab="tab-team">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    </svg>
+                    <span>Team</span>
+                </button>
             </div>
 
             <div class="nav-end" id="nav-end">
@@ -49,6 +128,13 @@
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
                     Google Sheets
                 </a>
+                <div id="user-profile" class="user-profile hidden">
+                    <img id="user-avatar" class="user-avatar" src="" alt="">
+                    <span id="user-name" class="user-name"></span>
+                    <button id="sign-out-btn" class="sign-out-btn" title="Sign out">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                    </button>
+                </div>
             </div>
         </div>
     </nav>
@@ -291,6 +377,99 @@
 
             <div id="ai-search-error" class="hidden"
                 style="padding: 12px 16px; background: var(--danger-light); border: 1px solid #fecaca; border-radius: var(--radius-sm); color: var(--danger); font-size: 0.9rem; margin-top: 12px;">
+            </div>
+        </section>
+
+        <!-- TAB 4: Team Management (Admin Only) -->
+        <section id="tab-team" class="tab-pane">
+            <header class="page-header">
+                <h1>Team Management</h1>
+                <p>Manage user roles. Senior members can view creator contact numbers.</p>
+            </header>
+
+            <div class="card">
+                <div class="team-header">
+                    <h3>Team Members</h3>
+                    <div class="role-legend">
+                        <span class="role-badge role-admin">Admin</span>
+                        <span class="role-badge role-senior">Senior</span>
+                        <span class="role-badge role-junior">Junior</span>
+                    </div>
+                </div>
+
+                <!-- Create External User Form -->
+                <div class="create-user-form" id="create-user-form">
+                    <div class="form-row">
+                        <input type="email" id="new-user-email" class="login-input" placeholder="Email" style="flex:1.5;">
+                        <input type="text" id="new-user-name" class="login-input" placeholder="Name" style="flex:1;">
+                        <input type="password" id="new-user-password" class="login-input" placeholder="Password (min 6)" style="flex:1;">
+                        <select id="new-user-role" class="filter-select" style="min-width:90px;">
+                            <option value="junior">Junior</option>
+                            <option value="senior">Senior</option>
+                        </select>
+                        <button id="create-user-btn" class="role-toggle-btn promote" style="white-space:nowrap;">+ Add User</button>
+                    </div>
+                    <div id="create-user-error" class="login-error hidden" style="margin-top:6px;font-size:0.8rem;"></div>
+                </div>
+
+                <div class="table-container">
+                    <table class="roster-table" id="team-table">
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Type</th>
+                                <th>Joined</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="team-tbody">
+                            <!-- JS Populated -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Audit Logs -->
+            <div class="card" style="margin-top:16px;">
+                <div class="team-header">
+                    <h3>Audit Log</h3>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <select id="audit-filter-op" class="filter-select" style="min-width:110px;">
+                            <option value="">All Operations</option>
+                            <option value="UPSERT">UPSERT</option>
+                            <option value="INSERT">INSERT</option>
+                            <option value="UPDATE">UPDATE</option>
+                            <option value="DELETE">DELETE</option>
+                            <option value="LOGIN">LOGIN</option>
+                            <option value="EXPORT">EXPORT</option>
+                            <option value="BULK_IMPORT">BULK IMPORT</option>
+                        </select>
+                        <button class="nav-btn" id="audit-refresh-btn" style="padding:6px 12px;" title="Refresh">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="table-container" style="max-height:400px;overflow-y:auto;">
+                    <table class="roster-table" id="audit-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Operation</th>
+                                <th>User</th>
+                                <th>Table</th>
+                                <th>Target</th>
+                                <th>Details</th>
+                                <th>Source</th>
+                                <th>IP</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audit-tbody">
+                            <!-- JS Populated -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </section>
 
