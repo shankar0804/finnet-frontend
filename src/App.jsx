@@ -10,6 +10,7 @@ import BrandsPage from './pages/BrandsPage';
 import TeamPage from './pages/TeamPage';
 import BrandPortalPage from './pages/BrandPortalPage';
 import WhatsAppPage from './pages/WhatsAppPage';
+import TaxonomyPage from './pages/TaxonomyPage';
 import { api } from './utils/api';
 
 function ProtectedRoute({ children }) {
@@ -51,6 +52,9 @@ export default function App() {
         } />
         <Route path="whatsapp" element={
           <RoleRoute allowed={['admin', 'senior']}><WhatsAppPage /></RoleRoute>
+        } />
+        <Route path="taxonomy" element={
+          <RoleRoute allowed={['admin']}><TaxonomyPage /></RoleRoute>
         } />
       </Route>
 
