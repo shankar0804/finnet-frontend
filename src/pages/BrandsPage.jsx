@@ -21,7 +21,7 @@ export default function BrandsPage() {
   const [selectedEntry, setSelectedEntry] = useState(null);
   const [selectedPlatform, setSelectedPlatform] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
-  const [entries, setEntries] = useState([]);
+  const [entries, setEntries] = useState({});
 
   // Fetch partnerships from API
   const loadBrands = useCallback(async () => {
@@ -54,15 +54,23 @@ export default function BrandsPage() {
     }
   }, []);
 
-  // Fetch entries for a specific campaign
+  // Fetch entries for a specific campaign. Server returns a flat list; the
+  // EntryTables component consumes a map keyed by platform, so we group here.
   const loadEntries = useCallback(async (campaignId) => {
     try {
       const data = await api.get(`/api/campaigns/${campaignId}/entries`);
-      setEntries(data || []);
-      return data || [];
+      const list = Array.isArray(data) ? data : [];
+      const grouped = { instagram: [], youtube: [], linkedin: [], twitter: [], custom: [] };
+      for (const e of list) {
+        const key = (e?.platform || 'instagram').toLowerCase();
+        (grouped[key] || grouped.custom).push(e);
+      }
+      setEntries(grouped);
+      return grouped;
     } catch (err) {
       console.error('Failed to load entries:', err);
-      return [];
+      setEntries({});
+      return {};
     }
   }, []);
 
