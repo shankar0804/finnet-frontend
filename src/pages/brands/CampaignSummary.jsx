@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { api } from '../../utils/api';
 import { formatMoney, formatNumber, formatDate } from '../../utils/formatters';
 
-/** Level 2: Campaign summary dashboard with entry management */
-export default function CampaignSummary({ brand, campaign, metrics, onViewEntries, onRefreshEntries }) {
+/** Level 2: Campaign summary dashboard with entry management.
+ *  `readOnly` hides every write action (Add Entry / Import Sheet / Excel)
+ *  so the same component can power the external brand portal. */
+export default function CampaignSummary({ brand, campaign, metrics, onViewEntries, onRefreshEntries, readOnly = false }) {
   const [showAddEntry, setShowAddEntry] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [entryError, setEntryError] = useState('');
@@ -120,19 +122,23 @@ export default function CampaignSummary({ brand, campaign, metrics, onViewEntrie
             <p>{brand.brand_name} · {platformsList} · {formatDate(campaign.start_date)} — {formatDate(campaign.end_date)}</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-ghost btn-sm" onClick={() => { setShowAddEntry(!showAddEntry); setShowImport(false); }}>
-              {showAddEntry ? 'Cancel' : '+ Add Entry'}
-            </button>
-            <button className="btn btn-ghost btn-sm" onClick={() => { setShowImport(!showImport); setShowAddEntry(false); }}>
-              {showImport ? 'Cancel' : '📊 Import Sheet'}
-            </button>
+            {!readOnly && (
+              <>
+                <button className="btn btn-ghost btn-sm" onClick={() => { setShowAddEntry(!showAddEntry); setShowImport(false); }}>
+                  {showAddEntry ? 'Cancel' : '+ Add Entry'}
+                </button>
+                <button className="btn btn-ghost btn-sm" onClick={() => { setShowImport(!showImport); setShowAddEntry(false); }}>
+                  {showImport ? 'Cancel' : '📊 Import Sheet'}
+                </button>
+              </>
+            )}
             <button className="btn btn-primary" onClick={onViewEntries}>View All Entries →</button>
           </div>
         </div>
       </header>
 
       {/* ─── Add Single Entry Form ─── */}
-      {showAddEntry && (
+      {!readOnly && showAddEntry && (
         <div className="card" style={{ marginBottom: 16 }}>
           <h3 style={{ marginBottom: 4 }}>Add Creator Entry</h3>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: 12 }}>
@@ -220,7 +226,7 @@ export default function CampaignSummary({ brand, campaign, metrics, onViewEntrie
       )}
 
       {/* ─── Bulk Import Form (Google Sheet + .xlsx with embedded images) ─── */}
-      {showImport && (
+      {!readOnly && showImport && (
         <div className="card" style={{ marginBottom: 16 }}>
           <h3 style={{ marginBottom: 6 }}>Bulk Import</h3>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginBottom: 12 }}>
@@ -330,7 +336,9 @@ export default function CampaignSummary({ brand, campaign, metrics, onViewEntrie
         <div className="empty-state">
           <div className="empty-state-icon">📝</div>
           <h3>No entries yet</h3>
-          <p>Add a creator entry or import a sheet to see content, engagement, and audience stats here.</p>
+          <p>{readOnly
+            ? 'Entries for this campaign will appear here once your Finnet PoC adds them.'
+            : 'Add a creator entry or import a sheet to see content, engagement, and audience stats here.'}</p>
         </div>
       ) : (
         <>
