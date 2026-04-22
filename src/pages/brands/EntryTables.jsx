@@ -1,5 +1,38 @@
 import { formatNumber, formatMoney, formatDate } from '../../utils/formatters';
 
+/** Renders the creator column: display name on top, @handle underneath.
+ *  Falls back gracefully when either piece is missing so we never show a
+ *  bare "@" like we used to. */
+function CreatorCell({ entry, platform }) {
+  const handle = entry.username || entry.creator_username || '';
+  const name = entry.creator_name || '';
+  const href = entry.profile_link || undefined;
+
+  // YouTube / LinkedIn display names are the primary identifier — handle is a slug.
+  const handlePrefix = platform === 'linkedin' ? '' : '@';
+  const showHandle = handle && handle !== name;
+
+  const primary = name || (handle ? `${handlePrefix}${handle}` : '—');
+
+  const inner = (
+    <div className="creator-cell">
+      <div style={{ fontWeight: 600 }}>{primary}</div>
+      {name && showHandle && (
+        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+          {handlePrefix}{handle}
+        </div>
+      )}
+    </div>
+  );
+
+  if (!href) return inner;
+  return (
+    <a href={href} target="_blank" rel="noreferrer" onClick={(ev) => ev.stopPropagation()} style={{ textDecoration: 'none', color: 'inherit' }}>
+      {inner}
+    </a>
+  );
+}
+
 /** Level 3: Platform-specific entry tables */
 export default function EntryTables({ campaign, entries, onSelectEntry }) {
   const platforms = [
@@ -58,11 +91,7 @@ function InstagramTable({ entries, onSelect }) {
           {entries.map((e, i) => (
             <tr key={e.id} className="entry-row" onClick={() => onSelect(e)}>
               <td>{i + 1}</td>
-              <td>
-                <div className="creator-cell">
-                  <a href={e.profile_link} target="_blank" rel="noreferrer" onClick={(ev) => ev.stopPropagation()}>@{e.username}</a>
-                </div>
-              </td>
+              <td><CreatorCell entry={e} platform="instagram" /></td>
               <td>{formatNumber(e.followers)}</td>
               <td><span className="badge badge-muted">{e.deliverable}</span></td>
               <td>{formatMoney(e.commercials)}</td>
@@ -106,7 +135,7 @@ function YouTubeTable({ entries, onSelect }) {
           {entries.map((e, i) => (
             <tr key={e.id} className="entry-row" onClick={() => onSelect(e)}>
               <td>{i + 1}</td>
-              <td><a href={e.profile_link} target="_blank" rel="noreferrer" onClick={(ev) => ev.stopPropagation()}>@{e.username}</a></td>
+              <td><CreatorCell entry={e} platform="youtube" /></td>
               <td>{formatNumber(e.subscribers)}</td>
               <td><span className="badge badge-muted">{e.deliverable}</span></td>
               <td>{formatMoney(e.commercials)}</td>
@@ -148,7 +177,7 @@ function LinkedInTable({ entries, onSelect }) {
           {entries.map((e, i) => (
             <tr key={e.id} className="entry-row" onClick={() => onSelect(e)}>
               <td>{i + 1}</td>
-              <td><a href={e.profile_link} target="_blank" rel="noreferrer" onClick={(ev) => ev.stopPropagation()}>@{e.username}</a></td>
+              <td><CreatorCell entry={e} platform="linkedin" /></td>
               <td>{formatNumber(e.followers)}</td>
               <td><span className="badge badge-muted">{e.deliverable}</span></td>
               <td>{formatMoney(e.commercials)}</td>
@@ -185,7 +214,7 @@ function TwitterTable({ entries, onSelect }) {
           {entries.map((e, i) => (
             <tr key={e.id} className="entry-row" onClick={() => onSelect(e)}>
               <td>{i + 1}</td>
-              <td><a href={e.profile_link} target="_blank" rel="noreferrer" onClick={(ev) => ev.stopPropagation()}>@{e.username}</a></td>
+              <td><CreatorCell entry={e} platform="twitter" /></td>
               <td>{formatNumber(e.followers)}</td>
               <td><span className="badge badge-muted">{e.deliverable}</span></td>
               <td>{formatMoney(e.commercials)}</td>

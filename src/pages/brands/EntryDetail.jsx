@@ -3,15 +3,25 @@ import { formatNumber, formatMoney, formatDate } from '../../utils/formatters';
 /** Level 4: Expanded entry detail — demographics, caption, comments, transcript */
 export default function EntryDetail({ entry, platform }) {
   const e = entry;
-  const hasDemographics = e.demographics && typeof e.demographics === 'object';
+  const hasDemographics = e.demographics && typeof e.demographics === 'object' && Object.keys(e.demographics).length > 0;
+
+  const handle = e.username || e.creator_username || '';
+  const name = e.creator_name || '';
+  const handlePrefix = platform === 'linkedin' ? '' : '@';
+  const displayTitle = name || (handle ? `${handlePrefix}${handle}` : 'Entry');
+  const showHandle = name && handle && handle !== name;
 
   return (
     <>
       <header className="page-header">
-        <h1>@{e.username}</h1>
+        <h1>{displayTitle}</h1>
         <p>
-          <a href={e.profile_link} target="_blank" rel="noreferrer">{e.profile_link}</a>
-          {' · '}{e.deliverable}{' · '}{formatMoney(e.commercials)}
+          {showHandle && <span style={{ color: 'var(--text-muted)', marginRight: 8 }}>{handlePrefix}{handle}</span>}
+          {e.profile_link && (
+            <a href={e.profile_link} target="_blank" rel="noreferrer">{e.profile_link}</a>
+          )}
+          {(e.deliverable || e.deliverable_type) && <>{' · '}{e.deliverable || e.deliverable_type}</>}
+          {(e.commercials || e.amount) ? <>{' · '}{formatMoney(e.commercials || e.amount)}</> : null}
         </p>
       </header>
 

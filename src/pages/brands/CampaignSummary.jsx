@@ -8,34 +8,58 @@ export default function CampaignSummary({ brand, campaign, metrics, onViewEntrie
   const [showImport, setShowImport] = useState(false);
   const [entryError, setEntryError] = useState('');
   const [entrySuccess, setEntrySuccess] = useState('');
+  const [entrySkipped, setEntrySkipped] = useState(null);
+  const [entrySubmitting, setEntrySubmitting] = useState(false);
+  const [screenshotFile, setScreenshotFile] = useState(null);
   const [importError, setImportError] = useState('');
   const [importSuccess, setImportSuccess] = useState('');
+  const [importSummary, setImportSummary] = useState(null);
   const [importing, setImporting] = useState(false);
+  const [excelFile, setExcelFile] = useState(null);
 
   // ─── Add Single Entry ───
+  // Accepts a content link, a screenshot, or both. Creator username is
+  // optional — it will be pulled from the scrape/OCR if not provided.
   const addEntry = async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    const creator_username = fd.get('creator_username')?.trim();
-    if (!creator_username) { setEntryError('Creator username is required.'); return; }
+    const creator_username = (fd.get('creator_username') || '').trim();
+    const content_link = (fd.get('content_link') || '').trim();
+    if (!content_link && !screenshotFile && !creator_username) {
+      setEntryError('Provide a content link, a screenshot, or a creator username.');
+      return;
+    }
     setEntryError('');
     setEntrySuccess('');
+    setEntrySkipped(null);
+    setEntrySubmitting(true);
+
+    const payload = new FormData();
+    payload.append('campaign_id', campaign.id);
+    if (creator_username) payload.append('creator_username', creator_username);
+    payload.append('deliverable_type', fd.get('deliverable_type') || 'Reel');
+    payload.append('content_link', content_link);
+    payload.append('amount', fd.get('amount') || 0);
+    if (fd.get('delivery_date')) payload.append('delivery_date', fd.get('delivery_date'));
+    payload.append('poc', (fd.get('poc') || '').trim());
+    payload.append('notes', (fd.get('notes') || '').trim());
+    if (screenshotFile) payload.append('screenshot', screenshotFile);
+
     try {
-      await api.post('/api/entries', {
-        campaign_id: campaign.id,
-        creator_username,
-        deliverable_type: fd.get('deliverable_type') || 'Reel',
-        content_link: fd.get('content_link')?.trim() || '',
-        amount: parseFloat(fd.get('amount')) || 0,
-        delivery_date: fd.get('delivery_date') || null,
-        poc: fd.get('poc')?.trim() || '',
-        notes: fd.get('notes')?.trim() || '',
-      });
-      setEntrySuccess(`✅ @${creator_username} added!`);
-      e.target.reset();
-      if (onRefreshEntries) onRefreshEntries();
+      const result = await api.upload('/api/entries', payload);
+      if (result && result.skipped) {
+        setEntrySkipped(result);
+      } else {
+        const who = creator_username || result.creator_username || 'creator';
+        setEntrySuccess(`Entry for @${who} added.`);
+        e.target.reset();
+        setScreenshotFile(null);
+        if (onRefreshEntries) onRefreshEntries();
+      }
     } catch (err) {
       setEntryError(err.message);
+    } finally {
+      setEntrySubmitting(false);
     }
   };
 
@@ -48,10 +72,35 @@ export default function CampaignSummary({ brand, campaign, metrics, onViewEntrie
     setImporting(true);
     setImportError('');
     setImportSuccess('');
+    setImportSummary(null);
     try {
       const result = await api.post(`/api/campaigns/${campaign.id}/import-sheet`, { sheet_url });
-      setImportSuccess(`✅ Imported ${result.imported} entries from the sheet!`);
+      setImportSuccess(`Imported ${result.imported} of ${result.total || result.imported} rows.`);
+      setImportSummary(result);
       e.target.reset();
+      if (onRefreshEntries) onRefreshEntries();
+    } catch (err) {
+      setImportError(err.message);
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  // ─── Excel (.xlsx) Import with embedded images ───
+  const importExcel = async (e) => {
+    e.preventDefault();
+    if (!excelFile) { setImportError('Pick an .xlsx file first.'); return; }
+    setImporting(true);
+    setImportError('');
+    setImportSuccess('');
+    setImportSummary(null);
+    const form = new FormData();
+    form.append('file', excelFile);
+    try {
+      const result = await api.upload(`/api/campaigns/${campaign.id}/import-excel`, form);
+      setImportSuccess(`Imported ${result.imported} of ${result.total || result.imported} rows.`);
+      setImportSummary(result);
+      setExcelFile(null);
       if (onRefreshEntries) onRefreshEntries();
     } catch (err) {
       setImportError(err.message);
@@ -85,16 +134,22 @@ export default function CampaignSummary({ brand, campaign, metrics, onViewEntrie
       {/* ─── Add Single Entry Form ─── */}
       {showAddEntry && (
         <div className="card" style={{ marginBottom: 16 }}>
-          <h3 style={{ marginBottom: 12 }}>Add Creator Entry</h3>
-          <form onSubmit={addEntry}>
+          <h3 style={{ marginBottom: 4 }}>Add Creator Entry</h3>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: 12 }}>
+            Paste an Instagram / YouTube / LinkedIn post link, attach a screenshot of the
+            insights, or both. Views, likes, engagement etc. are pulled automatically.
+            The creator must already exist in the roster (or have enough scraped data
+            for us to add them for you).
+          </p>
+          <form onSubmit={addEntry} encType="multipart/form-data">
             <div className="form-row" style={{ marginBottom: 8 }}>
               <div className="form-group" style={{ flex: 1.2 }}>
-                <label className="form-label">Creator Username *</label>
-                <input className="input" name="creator_username" placeholder="e.g. virat.kohli" />
+                <label className="form-label">Creator Username</label>
+                <input className="input" name="creator_username" placeholder="optional — inferred from link" />
               </div>
               <div className="form-group" style={{ flex: 0.6 }}>
                 <label className="form-label">Deliverable</label>
-                <select className="select" name="deliverable_type">
+                <select className="select" name="deliverable_type" defaultValue="Reel">
                   <option>Reel</option>
                   <option>Story</option>
                   <option>Post</option>
@@ -112,9 +167,9 @@ export default function CampaignSummary({ brand, campaign, metrics, onViewEntrie
               </div>
             </div>
             <div className="form-row" style={{ marginBottom: 10 }}>
-              <div className="form-group" style={{ flex: 1 }}>
+              <div className="form-group" style={{ flex: 1.3 }}>
                 <label className="form-label">Content Link</label>
-                <input className="input" name="content_link" placeholder="https://instagram.com/p/..." />
+                <input className="input" name="content_link" placeholder="https://instagram.com/reel/... | youtube.com/watch?v=... | linkedin.com/posts/..." />
               </div>
               <div className="form-group" style={{ flex: 0.6 }}>
                 <label className="form-label">PoC</label>
@@ -125,33 +180,128 @@ export default function CampaignSummary({ brand, campaign, metrics, onViewEntrie
                 <input className="input" name="notes" placeholder="Optional" />
               </div>
             </div>
-            <button className="btn btn-primary btn-sm" type="submit">Add Entry</button>
+            <div className="form-row" style={{ marginBottom: 10 }}>
+              <div className="form-group" style={{ flex: 1 }}>
+                <label className="form-label">Insights Screenshot (optional)</label>
+                <input
+                  className="input"
+                  type="file"
+                  accept="image/*"
+                  onChange={(ev) => setScreenshotFile(ev.target.files?.[0] || null)}
+                />
+                {screenshotFile && (
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 4 }}>
+                    Attached: {screenshotFile.name} · {(screenshotFile.size / 1024).toFixed(0)} KB
+                  </div>
+                )}
+              </div>
+            </div>
+            <button className="btn btn-primary btn-sm" type="submit" disabled={entrySubmitting}>
+              {entrySubmitting ? 'Processing…' : 'Add Entry'}
+            </button>
             {entryError && <div className="error-box" style={{ marginTop: 8 }}>{entryError}</div>}
-            {entrySuccess && <div style={{ marginTop: 8, padding: '8px 14px', background: 'var(--success-light)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 'var(--radius-sm)', color: 'var(--success)', fontSize: '0.82rem' }}>{entrySuccess}</div>}
+            {entrySuccess && (
+              <div style={{ marginTop: 8, padding: '8px 14px', background: 'var(--success-light)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 'var(--radius-sm)', color: 'var(--success)', fontSize: '0.82rem' }}>
+                {entrySuccess}
+              </div>
+            )}
+            {entrySkipped && (
+              <div style={{ marginTop: 8, padding: '10px 14px', background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.25)', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem' }}>
+                <strong>Skipped.</strong> {entrySkipped.reason}
+                {entrySkipped.missing_creator && (
+                  <div style={{ marginTop: 4, color: 'var(--text-muted)' }}>
+                    Add <code>@{entrySkipped.missing_creator}</code> to the roster first, then retry.
+                  </div>
+                )}
+              </div>
+            )}
           </form>
         </div>
       )}
 
-      {/* ─── Google Sheet Import Form ─── */}
+      {/* ─── Bulk Import Form (Google Sheet + .xlsx with embedded images) ─── */}
       {showImport && (
         <div className="card" style={{ marginBottom: 16 }}>
-          <h3 style={{ marginBottom: 6 }}>Import from Google Sheets</h3>
+          <h3 style={{ marginBottom: 6 }}>Bulk Import</h3>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginBottom: 12 }}>
-            Paste a Google Sheet URL with columns: <code>username</code>, <code>deliverable</code>, <code>amount</code>, <code>date</code>, <code>link</code>, <code>poc</code>, <code>notes</code>.
-            The sheet must be shared as <strong>"Anyone with the link"</strong>.
+            Each row needs a <code>link</code> to an IG / YouTube / LinkedIn post, and may
+            also carry a screenshot (for Excel, paste images right into the row's cells).
+            Columns we recognise: <code>username</code>, <code>deliverable</code>, <code>amount</code>,
+            <code>date</code>, <code>link</code>, <code>poc</code>, <code>notes</code>. Rows whose creator
+            isn't in the roster yet will come back in a skipped list.
           </p>
-          <form onSubmit={importSheet}>
-            <div className="form-row" style={{ marginBottom: 8 }}>
+
+          <form onSubmit={importSheet} style={{ marginBottom: 12 }}>
+            <label className="form-label">Google Sheet URL</label>
+            <div className="form-row" style={{ marginBottom: 0 }}>
               <div className="form-group" style={{ flex: 1 }}>
                 <input className="input" name="sheet_url" placeholder="https://docs.google.com/spreadsheets/d/..." style={{ fontFamily: 'monospace', fontSize: '0.8rem' }} />
               </div>
               <button className="btn btn-primary btn-sm" type="submit" disabled={importing} style={{ alignSelf: 'flex-end' }}>
-                {importing ? 'Importing…' : '📥 Import'}
+                {importing ? 'Importing…' : 'Import Sheet'}
               </button>
             </div>
-            {importError && <div className="error-box" style={{ marginTop: 8 }}>{importError}</div>}
-            {importSuccess && <div style={{ marginTop: 8, padding: '8px 14px', background: 'var(--success-light)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 'var(--radius-sm)', color: 'var(--success)', fontSize: '0.82rem' }}>{importSuccess}</div>}
           </form>
+
+          <form onSubmit={importExcel} encType="multipart/form-data">
+            <label className="form-label">…or upload an .xlsx file (supports embedded screenshots)</label>
+            <div className="form-row" style={{ marginBottom: 0 }}>
+              <div className="form-group" style={{ flex: 1 }}>
+                <input
+                  className="input"
+                  type="file"
+                  accept=".xlsx"
+                  onChange={(ev) => setExcelFile(ev.target.files?.[0] || null)}
+                />
+                {excelFile && (
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 4 }}>
+                    {excelFile.name} · {(excelFile.size / 1024).toFixed(0)} KB
+                  </div>
+                )}
+              </div>
+              <button className="btn btn-primary btn-sm" type="submit" disabled={importing || !excelFile} style={{ alignSelf: 'flex-end' }}>
+                {importing ? 'Importing…' : 'Import Excel'}
+              </button>
+            </div>
+          </form>
+
+          {importError && <div className="error-box" style={{ marginTop: 8 }}>{importError}</div>}
+          {importSuccess && (
+            <div style={{ marginTop: 8, padding: '8px 14px', background: 'var(--success-light)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 'var(--radius-sm)', color: 'var(--success)', fontSize: '0.82rem' }}>
+              {importSuccess}
+            </div>
+          )}
+          {importSummary && (importSummary.skipped?.length > 0 || importSummary.failed?.length > 0) && (
+            <div style={{ marginTop: 10, padding: '10px 14px', background: 'rgba(234,179,8,0.06)', border: '1px solid rgba(234,179,8,0.2)', borderRadius: 'var(--radius-sm)', fontSize: '0.78rem' }}>
+              {importSummary.skipped?.length > 0 && (
+                <>
+                  <strong>Skipped ({importSummary.skipped.length})</strong>
+                  <ul style={{ margin: '6px 0 10px 18px' }}>
+                    {importSummary.skipped.slice(0, 20).map((s, i) => (
+                      <li key={`sk-${i}`}>
+                        Row {s.row}
+                        {s.username ? <> · <code>@{s.username}</code></> : null}
+                        {s.platform ? <> · {s.platform}</> : null}
+                        {' '}— {s.reason}
+                      </li>
+                    ))}
+                    {importSummary.skipped.length > 20 && <li>…and {importSummary.skipped.length - 20} more</li>}
+                  </ul>
+                </>
+              )}
+              {importSummary.failed?.length > 0 && (
+                <>
+                  <strong>Failed ({importSummary.failed.length})</strong>
+                  <ul style={{ margin: '6px 0 0 18px' }}>
+                    {importSummary.failed.slice(0, 10).map((f, i) => (
+                      <li key={`fl-${i}`}>Row {f.row} — {f.error}</li>
+                    ))}
+                    {importSummary.failed.length > 10 && <li>…and {importSummary.failed.length - 10} more</li>}
+                  </ul>
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -176,16 +326,127 @@ export default function CampaignSummary({ brand, campaign, metrics, onViewEntrie
       </div>
 
       {/* Content Summary */}
-      {metrics && (
-        <div className="card">
-          <h3>Content Summary</h3>
-          <div className="metrics-grid">
-            <MetricCard label="Total Entries" value={metrics.entryCount || 0} />
-            <MetricCard label="Live Content" value={metrics.liveCount || 0} accent />
-            <MetricCard label="Total Spend" value={formatMoney(metrics.totalSpend)} />
-            <MetricCard label="Budget" value={formatMoney(campaign.budget)} />
-          </div>
+      {!metrics ? (
+        <div className="empty-state">
+          <div className="empty-state-icon">📝</div>
+          <h3>No entries yet</h3>
+          <p>Add a creator entry or import a sheet to see content, engagement, and audience stats here.</p>
         </div>
+      ) : (
+        <>
+          <div className="card">
+            <h3>Content Summary</h3>
+            <div className="metrics-grid">
+              <MetricCard label="Total Influencers" value={formatNumber(metrics.totalInfluencers)} />
+              <MetricCard label="Live Content" value={formatNumber(metrics.liveCount)} accent />
+            </div>
+          </div>
+
+          {metrics.formats.length > 0 && (
+            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+              <div style={{ padding: '14px 18px 6px' }}>
+                <h3 style={{ margin: 0 }}>Content Formats</h3>
+              </div>
+              <div className="table-wrap" style={{ maxHeight: 'none' }}>
+                <table className="table">
+                  <thead>
+                    <tr><th>Platform</th><th>Asset</th><th style={{ textAlign: 'right' }}>Quantity</th></tr>
+                  </thead>
+                  <tbody>
+                    {metrics.formats.map((f, i) => (
+                      <tr key={i}>
+                        <td>{f.platform}</td>
+                        <td><span className="badge badge-muted">{f.asset}</span></td>
+                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{f.quantity}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <div className="card">
+            <h3>Engagement Metrics</h3>
+            <div className="metrics-grid">
+              <MetricCard label="Total Views" value={formatNumber(metrics.totalViews)} accent />
+              <MetricCard label="Total Likes" value={formatNumber(metrics.totalLikes)} />
+              <MetricCard label="Total Comments" value={formatNumber(metrics.totalComments)} />
+              <MetricCard label="Total Shares" value={formatNumber(metrics.totalShares)} />
+              <MetricCard label="Total Saves" value={formatNumber(metrics.totalSaves)} />
+              <MetricCard
+                label="Avg Engagement Rate"
+                value={metrics.avgEngagementRate > 0 ? `${metrics.avgEngagementRate.toFixed(2)}%` : '—'}
+                accent
+              />
+            </div>
+          </div>
+
+          <div className="card">
+            <h3>Performance Statistics</h3>
+            <div className="metrics-grid">
+              <MetricCard label="Total Budget" value={formatMoney(campaign.budget)} />
+              <MetricCard label="Total Spend" value={formatMoney(metrics.totalSpend)} />
+              <MetricCard
+                label="CPV"
+                value={metrics.cpv > 0 ? `₹${metrics.cpv.toFixed(2)}` : '—'}
+                accent
+              />
+              <MetricCard
+                label="CPE"
+                value={metrics.cpe > 0 ? `₹${metrics.cpe.toFixed(2)}` : '—'}
+                accent
+              />
+            </div>
+          </div>
+
+          {metrics.hasDemographics && (
+            <div className="card">
+              <h3>Demographic Statistics</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                <div>
+                  <div className="form-label" style={{ marginBottom: 10 }}>Age Distribution</div>
+                  <div className="demo-bars">
+                    {[
+                      ['13-17', metrics.demographics.age_13_17],
+                      ['18-24', metrics.demographics.age_18_24],
+                      ['25-34', metrics.demographics.age_25_34],
+                      ['35-44', metrics.demographics.age_35_44],
+                      ['45-54', metrics.demographics.age_45_54],
+                    ].map(([label, val]) => (
+                      <DemoBar key={label} label={label} value={val} />
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="form-label" style={{ marginBottom: 10 }}>Gender Split</div>
+                  <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+                    <div className="demo-pill" style={{ flex: 1 }}>
+                      <span className="demo-pill-label">♂ Male</span>
+                      <span className="demo-pill-val">{metrics.demographics.male || '—'}</span>
+                    </div>
+                    <div className="demo-pill" style={{ flex: 1 }}>
+                      <span className="demo-pill-label">♀ Female</span>
+                      <span className="demo-pill-val">{metrics.demographics.female || '—'}</span>
+                    </div>
+                  </div>
+
+                  <div className="form-label" style={{ marginBottom: 10 }}>Top Cities</div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {metrics.demographics.cities.length === 0 ? (
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>—</span>
+                    ) : (
+                      metrics.demographics.cities.map((city, i) => (
+                        <span key={i} className="badge badge-muted">{city}</span>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </>
   );
@@ -196,6 +457,19 @@ function MetricCard({ label, value, accent }) {
     <div className="metric-card">
       <div className="metric-label">{label}</div>
       <div className="metric-val" style={accent ? { color: 'var(--accent-hover)' } : undefined}>{value}</div>
+    </div>
+  );
+}
+
+function DemoBar({ label, value }) {
+  const pct = parseFloat(String(value || '').replace('%', '')) || 0;
+  return (
+    <div className="demo-bar-row">
+      <span className="demo-bar-label">{label}</span>
+      <div className="demo-bar-track">
+        <div className="demo-bar-fill" style={{ width: `${Math.min(pct, 100)}%` }} />
+      </div>
+      <span className="demo-bar-val">{value || '—'}</span>
     </div>
   );
 }
