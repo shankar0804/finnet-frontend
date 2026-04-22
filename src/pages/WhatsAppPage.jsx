@@ -1,38 +1,64 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '';
 
+/**
+ * Visual metadata per backend bot state (bot.js emits these via /api/whatsapp/status).
+ * Keeping this table-driven so we don't end up with mismatched labels/colors like
+ * "Connected" in the banner but "Offline" in the metric card.
+ */
+const STATE_META = {
+  connected:    { label: 'Connected',         dot: 'var(--success)',    emoji: '🟢', hint: 'The FinBot is live and listening for @finbot mentions.' },
+  qr:           { label: 'Awaiting QR Scan',  dot: 'var(--warning)',    emoji: '📱', hint: 'Scan the QR code below from WhatsApp → Settings → Linked Devices.' },
+  reconnecting: { label: 'Reconnecting…',     dot: 'var(--warning)',    emoji: '🟡', hint: 'Temporary disconnect — retrying automatically. Hang tight.' },
+  logged_out:   { label: 'Logged Out',        dot: 'var(--danger)',     emoji: '🔒', hint: 'Session ended on WhatsApp. A fresh QR will appear in a moment — please rescan.' },
+  offline:      { label: 'Offline',           dot: 'var(--text-muted)', emoji: '⚫', hint: 'Bot process is not reachable. It may still be starting up.' },
+};
+
+function stateMeta(state) {
+  return STATE_META[state] || STATE_META.offline;
+}
+
 export default function WhatsAppPage() {
   const { isAdmin } = useAuth();
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const intervalRef = useRef(null);
 
   const fetchStatus = useCallback(async () => {
-    setLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/whatsapp/status`);
       const data = await res.json();
       setStatus(data);
+      setLastUpdated(new Date());
     } catch {
-      setStatus({ state: 'offline', qr: null, phone: null });
+      setStatus({ state: 'offline', qr: null, qrBase64: null, phone: null });
+      setLastUpdated(new Date());
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
+  // Poll faster when we're not steadily connected — a freshly-scanned QR,
+  // or a reconnect, should flip the UI within a couple of seconds.
   useEffect(() => {
     fetchStatus();
-    const interval = setInterval(fetchStatus, 10000); // Poll every 10s
-    return () => clearInterval(interval);
   }, [fetchStatus]);
 
-  const stateColor = {
-    open: 'var(--success)',
-    connecting: 'var(--warning)',
-    offline: 'var(--text-muted)',
-    close: 'var(--danger)',
-  };
+  useEffect(() => {
+    const pollMs = status?.state === 'connected' ? 10000 : 3000;
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = setInterval(fetchStatus, pollMs);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [status?.state, fetchStatus]);
+
+  const meta = stateMeta(status?.state);
+  const showQR = Boolean(status?.qrBase64);
+  const isConnected = status?.state === 'connected';
+  const isWaiting = status?.state === 'reconnecting' || status?.state === 'logged_out';
 
   return (
     <div className="page-container">
@@ -46,50 +72,96 @@ export default function WhatsAppPage() {
           <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Checking status…</div>
         ) : (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+            {/* ─── Status banner ─── */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
               <div style={{
                 width: 10, height: 10, borderRadius: '50%',
-                background: stateColor[status?.state] || stateColor.offline,
-                boxShadow: status?.state === 'open' ? '0 0 8px var(--success)' : 'none',
+                background: meta.dot,
+                boxShadow: isConnected ? `0 0 8px ${meta.dot}` : 'none',
               }} />
-              <span style={{ fontSize: '1.1rem', fontWeight: 600, textTransform: 'capitalize' }}>
-                {status?.state || 'offline'}
+              <span style={{ fontSize: '1.1rem', fontWeight: 600 }}>
+                {meta.label}
               </span>
-              {status?.phone && (
+              {isConnected && status?.phone && (
                 <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                  — {status.phone}
+                  — +{status.phone}
                 </span>
               )}
+              <div style={{ flex: 1 }} />
+              {lastUpdated && (
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
+                  Last checked {lastUpdated.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </span>
+              )}
+              <button className="btn btn-ghost btn-sm" onClick={fetchStatus}>↻ Refresh</button>
             </div>
 
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: 0, marginBottom: 20 }}>
+              {meta.hint}
+            </p>
+
+            {/* ─── Quick status cards ─── */}
             <div className="metrics-grid" style={{ marginBottom: 20 }}>
               <div className="metric-card">
                 <div className="metric-label">Status</div>
-                <div className="metric-val" style={{ fontSize: '1rem', color: stateColor[status?.state] || stateColor.offline }}>
-                  {status?.state === 'open' ? '🟢 Connected' : status?.state === 'connecting' ? '🟡 Connecting' : '⚫ Offline'}
+                <div className="metric-val" style={{ fontSize: '1rem', color: meta.dot }}>
+                  {meta.emoji} {meta.label}
                 </div>
               </div>
               <div className="metric-card">
                 <div className="metric-label">Phone</div>
-                <div className="metric-val" style={{ fontSize: '1rem' }}>{status?.phone || '—'}</div>
+                <div className="metric-val" style={{ fontSize: '1rem' }}>
+                  {isConnected && status?.phone ? `+${status.phone}` : '—'}
+                </div>
               </div>
             </div>
 
-            {/* QR Code for scanning */}
-            {status?.qrBase64 && status?.state !== 'open' && (
-              <div style={{ textAlign: 'center', padding: 24 }}>
-                <p style={{ color: 'var(--text-secondary)', marginBottom: 12, fontSize: '0.9rem' }}>Scan this QR code with WhatsApp to connect:</p>
+            {/* ─── QR code (shown whenever the bot is waiting to be scanned) ─── */}
+            {showQR && !isConnected && (
+              <div style={{
+                textAlign: 'center',
+                padding: 24,
+                marginBottom: 8,
+                background: 'var(--bg-elevated, rgba(148,163,184,0.04))',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-sm, 8px)',
+              }}>
+                <div style={{ fontSize: '1rem', fontWeight: 600, marginBottom: 4 }}>
+                  Link WhatsApp to FinBot
+                </div>
+                <p style={{ color: 'var(--text-muted)', marginBottom: 14, fontSize: '0.82rem', maxWidth: 420, margin: '0 auto 14px' }}>
+                  On your phone: WhatsApp → <strong>Settings</strong> → <strong>Linked devices</strong> → <strong>Link a device</strong>, then point the camera at this QR.
+                </p>
                 <img
                   src={status.qrBase64}
                   alt="WhatsApp QR"
-                  style={{ width: 240, height: 240, borderRadius: 12, border: '1px solid var(--border)' }}
+                  style={{ width: 240, height: 240, borderRadius: 12, border: '1px solid var(--border)', background: '#fff' }}
                 />
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', marginTop: 10 }}>
+                  Refreshes automatically every 3 seconds · QR expires after ~60s and is regenerated
+                </div>
               </div>
             )}
 
-            <div style={{ textAlign: 'right' }}>
-              <button className="btn btn-ghost btn-sm" onClick={fetchStatus}>↻ Refresh</button>
-            </div>
+            {/* ─── Helpful message when there's no QR yet but we're not connected ─── */}
+            {!showQR && !isConnected && (
+              <div style={{
+                textAlign: 'center',
+                padding: '20px 16px',
+                marginBottom: 8,
+                background: 'rgba(234,179,8,0.06)',
+                border: '1px solid rgba(234,179,8,0.25)',
+                borderRadius: 'var(--radius-sm, 8px)',
+                color: 'var(--text-secondary)',
+                fontSize: '0.88rem',
+              }}>
+                {isWaiting ? (
+                  <>The bot is {status?.state === 'logged_out' ? 'restarting after being logged out' : 'reconnecting'}. A new QR code will appear here shortly — this page refreshes automatically.</>
+                ) : (
+                  <>The bot process isn't reporting a QR yet. If this persists for more than a minute, ask a backend operator to restart the WhatsApp bot service.</>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>
