@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
-  IconUsers, IconUpload, IconSearch, IconFolder, IconShield, IconBriefcase, IconPhone, IconLogout,
+  IconUsers, IconUpload, IconSearch, IconFolder, IconShield, IconBriefcase, IconPhone, IconTag, IconLogout,
 } from './Icons';
 
 const NAV_ITEMS = [
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { to: '/brands',  label: 'Brands',     icon: IconFolder,    roles: ['admin', 'senior'] },
   { to: '/team',    label: 'Team',       icon: IconShield,    roles: ['admin', 'senior'] },
   { to: '/whatsapp',label: 'WhatsApp',   icon: IconPhone,     roles: ['admin', 'senior'] },
+  { to: '/taxonomy',label: 'Taxonomy',   icon: IconTag,       roles: ['admin'] },
   { to: '/brand-portal', label: 'Portal', icon: IconBriefcase, roles: ['brand'] },
 ];
 
